@@ -1,43 +1,81 @@
-import streamlit as st
+import cv2
+import numpy as np
 import pandas as pd
-from sklearn import datasets
-from sklearn.ensemble import RandomForestClassifier
+import streamlit as st
 
-st.write('''
-# Application de Visualisation de la prédiction des données Iris
-Cette démo prédit la catégorie des fleurs d'Iris
-''')
+# define the weights to be used along with its config file
+config =  'yolov3.cfg'
+wt_file = 'yolov3.weights'
+
+# Add a title and sidebar
+st.title("Object Detection")
+st.sidebar.markdown("# Model")
+confidence_threshold = st.sidebar.slider("Confidence threshold", 0.0, 1.0, 0.5, 0.01)
+
+@st.cache(show_spinner=True)
+def read_img(img):
+    image = cv2.imread(img, cv2.IMREAD_COLOR)
+    image = image[:, :, [2, 1, 0]] # BGR -> RGB
+    return image
 
 
-st.sidebar.header("Les paramètres d'entrée")
+def yolo_v3(image, confidence_threshold=0.5, overlap_threshold=0.3):
+    # Load model architecture
+    net = cv2.dnn.readNetFromDarknet(config, wt_file)
+    output_layer_names = net.getLayerNames()
+    output_layer_names = [output_layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
 
-#Paramétrage du modèle
-def user_input():
-    sepal_length=st.sidebar.slider('La longeur du Sepal',4.3,7.9,4.3)
-    sepal_width=st.sidebar.slider('La lareur du Sepal',2.0,4.4,3.3)
-    petal_length=st.sidebar.slider('La longueur du Petal',1.0,6.9,2.3)
-    petal_width=st.sidebar.slider('La largeur du Petal',0.1,2.5,1.3)
-    data={'sepal_length': sepal_length,
-    'sepal_width': sepal_width,
-    'petal_length': petal_length,
-    'petal_width': petal_width
-    }
-    fleurs_parameters=pd.DataFrame(data,index=[0])
-    return fleurs_parameters
+    # Set input and get output
+    blob = cv2.dnn.blobFromImage(image, 1 / 255.0, (416, 416), swapRB=True, crop=False)
+    net.setInput(blob)
+    layer_outputs = net.forward(output_layer_names)
 
-df=user_input()
+    boxes, confidences, class_IDs = [], [], []
+    H, W = image.shape[:2]
 
-st.subheader('on veut trouver la catégorie de cette fleur')
-st.write(df)
+    # For each detected object, compute the box, find the score, ignore if below
+    for output in layer_outputs:
+        for detection in output:
+            scores = detection[5:]
+            classID = np.argmax(scores)
+            confidence = scores[classID]
+            if confidence > confidence_threshold:
+                box = detection[0:4] * np.array([W, H, W, H])
+                centerX, centerY, width, height = box.astype("int")
+                x, y = int(centerX - (width / 2)), int(centerY - (height / 2))
+                boxes.append([x, y, int(width), int(height)])
+                confidences.append(float(confidence))
+                class_IDs.append(classID)
 
-#Appel de notre modèle
-#Import des données
-iris=datasets.load_iris()
-clf=RandomForestClassifier()
-clf.fit(iris.data,iris.target)
+    # Write the name of detected objects above image
+    f = open("classes.txt", "r")
+    f = f.readlines()
+    f = [line.rstrip('\n') for line in list(f)]
+    try:
+        st.subheader("Detected objects: " + ', '.join(list(set([f[obj] for obj in class_IDs]))))
+    except IndexError:
+        st.write("Nothing detected")
 
-prediction=clf.predict(df)
+    # Apply non-max suppression to identify best bounding box
+    indices = cv2.dnn.NMSBoxes(boxes, confidences, confidence_threshold, overlap_threshold)
+    xmin, xmax, ymin, ymax, labels = [], [], [], [], []
 
-st.subheader("La catégorie de la fleur est:")
-st.write(iris.target_names[prediction])
+    if len(indices) > 0:
+        for i in indices.flatten():
+            x, y, w, h = boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3]
+            xmin.append(x)
+            ymin.append(y)
+            xmax.append(x + w)
+            ymax.append(y + h)
+    boxes = pd.DataFrame({"xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax})
+
+    # Add a layer on top on a detected object
+    LABEL_COLORS = [0, 255, 0]
+    image_with_boxes = image.astype(np.float64)
+    for _, (xmin, ymin, xmax, ymax) in boxes.iterrows():
+        image_with_boxes[int(ymin):int(ymax), int(xmin):int(xmax), :] += LABEL_COLORS
+        image_with_boxes[int(ymin):int(ymax), int(xmin):int(xmax), :] /= 2
+
+    # Display the final image
+    st.image(image_with_boxes.astype(np.uint8), use_column_width=True)
 
