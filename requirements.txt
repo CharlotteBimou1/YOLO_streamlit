@@ -232,7 +232,7 @@ requests @ file:///tmp/build/80754af9/requests_1592841827918/work
 requests-oauthlib==1.3.0
 retrying==1.3.3
 rope @ file:///tmp/build/80754af9/rope_1602264064449/work
-rsa==4.6
+rsa==4.7
 Rtree @ file:///C:/ci/rtree_1618421009405/work
 ruamel_yaml==0.15.87
 scikit-image==0.17.2
