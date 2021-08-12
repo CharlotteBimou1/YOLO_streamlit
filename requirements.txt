@@ -217,7 +217,7 @@ python-language-server @ file:///tmp/build/80754af9/python-language-server_16079
 python-slugify @ file:///tmp/build/80754af9/python-slugify_1620405669636/work
 pytz==2020.1
 PyWavelets @ file:///C:/ci/pywavelets_1601658407916/work
-pywin32==227
+pywin32==301
 pywin32-ctypes==0.2.0
 pywinpty==0.5.7
 PyYAML==5.4
