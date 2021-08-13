@@ -115,7 +115,7 @@ def main():
             obj_detection(my_img)
 
     elif choice == "See an illustration":
-        my_img = Image.open("C://Users//lenoa//YOLO//Streamlit_yolov3//img1.jpg")
+        my_img = Image.open("img1.jpg")
         obj_detection(my_img)
 
 
