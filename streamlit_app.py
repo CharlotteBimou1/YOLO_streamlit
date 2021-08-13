@@ -1,81 +1,124 @@
+import streamlit as st
 import cv2
 import numpy as np
-import pandas as pd
-import streamlit as st
-
-# define the weights to be used along with its config file
-config =  'yolov3.cfg'
-wt_file = 'yolov3.weights'
-
-# Add a title and sidebar
-st.title("Object Detection")
-st.sidebar.markdown("# Model")
-confidence_threshold = st.sidebar.slider("Confidence threshold", 0.0, 1.0, 0.5, 0.01)
-
-@st.cache(show_spinner=True)
-def read_img(img):
-    image = cv2.imread(img, cv2.IMREAD_COLOR)
-    image = image[:, :, [2, 1, 0]] # BGR -> RGB
-    return image
+import matplotlib.pyplot as plt
+from PIL import Image
 
 
-def yolo_v3(image, confidence_threshold=0.5, overlap_threshold=0.3):
-    # Load model architecture
-    net = cv2.dnn.readNetFromDarknet(config, wt_file)
-    output_layer_names = net.getLayerNames()
-    output_layer_names = [output_layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+def obj_detection(my_img):
+    st.set_option('deprecation.showPyplotGlobalUse', False)
 
-    # Set input and get output
-    blob = cv2.dnn.blobFromImage(image, 1 / 255.0, (416, 416), swapRB=True, crop=False)
+    column1, column2 = st.beta_columns(2)
+
+    column1.subheader("Input image")
+    st.text("")
+    plt.figure(figsize=(16, 16))
+    plt.imshow(my_img)
+    column1.pyplot(use_column_width=True)
+    ## C://Users//lenoa//YOLO//Streamlit_yolov3//yolov3.weights : fichier des poids
+    ## C://Users//lenoa//YOLO//Streamlit_yolov3//yolov3.cfg : fichier de configuration
+    # YOLO model
+    net = cv2.dnn.readNet("C://Users//lenoa//YOLO//Streamlit_yolov3//yolov3.weights",
+                          "C://Users//lenoa//YOLO//Streamlit_yolov3//yolov3.cfg")
+
+    labels = []
+    with open("C://Users//lenoa//YOLO//Streamlit_yolov3//coco.names", "r") as f:
+        labels = [line.strip() for line in f.readlines()]
+    names_of_layer = net.getLayerNames()
+    output_layers = [names_of_layer[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+
+    colors = np.random.uniform(0, 255, size=(len(labels), 3))
+
+    # Image loading
+    newImage = np.array(my_img.convert('RGB'))
+    img = cv2.cvtColor(newImage, 1)
+    height, width, channels = img.shape
+
+    # Objects detection (Converting into blobs)
+    blob = cv2.dnn.blobFromImage(img, 0.00392, (416, 416), (0, 0, 0), True,
+                                 crop=False)  # (image, scalefactor, size, mean(mean subtraction from each layer), swapRB(Blue to red), crop)
+
     net.setInput(blob)
-    layer_outputs = net.forward(output_layer_names)
+    outputs = net.forward(output_layers)
 
-    boxes, confidences, class_IDs = [], [], []
-    H, W = image.shape[:2]
+    classID = []
+    confidences = []
+    boxes = []
 
-    # For each detected object, compute the box, find the score, ignore if below
-    for output in layer_outputs:
-        for detection in output:
+    # SHOWING INFORMATION CONTAINED IN 'outputs' VARIABLE ON THE SCREEN
+    for op in outputs:
+        for detection in op:
             scores = detection[5:]
-            classID = np.argmax(scores)
-            confidence = scores[classID]
-            if confidence > confidence_threshold:
-                box = detection[0:4] * np.array([W, H, W, H])
-                centerX, centerY, width, height = box.astype("int")
-                x, y = int(centerX - (width / 2)), int(centerY - (height / 2))
-                boxes.append([x, y, int(width), int(height)])
+            class_id = np.argmax(scores)
+            confidence = scores[class_id]
+            if confidence > 0.5:
+                # OBJECT DETECTED
+                # Get the coordinates of object: center,width,height
+                center_x = int(detection[0] * width)
+                center_y = int(detection[1] * height)
+                w = int(detection[2] * width)  # width is the original width of image
+                h = int(detection[3] * height)  # height is the original height of the image
+
+                # RECTANGLE COORDINATES
+                x = int(center_x - w / 2)  # Top-Left x
+                y = int(center_y - h / 2)  # Top-left y
+
+                # To organize the objects in array so that we can extract them later
+                boxes.append([x, y, w, h])
                 confidences.append(float(confidence))
-                class_IDs.append(classID)
+                classID.append(class_id)
 
-    # Write the name of detected objects above image
-    f = open("classes.txt", "r")
-    f = f.readlines()
-    f = [line.rstrip('\n') for line in list(f)]
-    try:
-        st.subheader("Detected objects: " + ', '.join(list(set([f[obj] for obj in class_IDs]))))
-    except IndexError:
-        st.write("Nothing detected")
+    score_threshold = st.sidebar.slider("Confidence_threshold", 0.00, 1.00, 0.5, 0.01)
+    nms_threshold = st.sidebar.slider("NMS_threshold", 0.00, 1.00, 0.4, 0.01)
 
-    # Apply non-max suppression to identify best bounding box
-    indices = cv2.dnn.NMSBoxes(boxes, confidences, confidence_threshold, overlap_threshold)
-    xmin, xmax, ymin, ymax, labels = [], [], [], [], []
+    indexes = cv2.dnn.NMSBoxes(boxes, confidences, score_threshold, nms_threshold)
+    print(indexes)
 
-    if len(indices) > 0:
-        for i in indices.flatten():
-            x, y, w, h = boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3]
-            xmin.append(x)
-            ymin.append(y)
-            xmax.append(x + w)
-            ymax.append(y + h)
-    boxes = pd.DataFrame({"xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax})
+    # font = cv2.FONT_HERSHEY_SIMPLEX
+    items = []
+    for i in range(len(boxes)):
+        if i in indexes:
+            x, y, w, h = boxes[i]
+            # To get the name of object
+            label = str.upper((labels[classID[i]]))
+            color = colors[i]
+            cv2.rectangle(img, (x, y), (x + w, y + h), color, 3)
+            items.append(label)
 
-    # Add a layer on top on a detected object
-    LABEL_COLORS = [0, 255, 0]
-    image_with_boxes = image.astype(np.float64)
-    for _, (xmin, ymin, xmax, ymax) in boxes.iterrows():
-        image_with_boxes[int(ymin):int(ymax), int(xmin):int(xmax), :] += LABEL_COLORS
-        image_with_boxes[int(ymin):int(ymax), int(xmin):int(xmax), :] /= 2
+    st.text("")
+    column2.subheader("Output image")
+    st.text("")
+    plt.figure(figsize=(15, 15))
+    plt.imshow(img)
+    column2.pyplot(use_column_width=True)
 
-    # Display the final image
-    st.image(image_with_boxes.astype(np.uint8), use_column_width=True)
+    if len(indexes) > 1:
+        st.success("Found {} Objects - {}".format(len(indexes), [item for item in set(items)]))
+    else:
+        st.success("Found {} Object - {}".format(len(indexes), [item for item in set(items)]))
+
+
+def main():
+    st.title("Welcome to Streamlit app")
+    st.write(
+        "You can view real-time object detection done using YOLO model here. Select one of the following options to proceed:")
+
+    choice = st.radio("", ("See an illustration", "Choose an image of your choice"))
+    # st.write()
+
+    if choice == "Choose an image of your choice":
+        # st.set_option('deprecation.showfileUploaderEncoding', False)
+        image_file = st.file_uploader("Upload", type=['jpg', 'png', 'jpeg'])
+
+        if image_file is not None:
+            my_img = Image.open(image_file)
+            obj_detection(my_img)
+
+    elif choice == "See an illustration":
+        my_img = Image.open("C://Users//lenoa//YOLO//Streamlit_yolov3//img1.jpg")
+        obj_detection(my_img)
+
+
+if __name__ == '__main__':
+    main()
 
