@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 ############ 1- Définition de la fonction de détection d'objet ####################
+#@st.cache(suppress_st_warning=True)#ajout d'un décorateur
 def obj_detection(my_img):
     st.set_option('deprecation.showPyplotGlobalUse', False) #streamlit.set_option définit les options de configuration
 #streamlit.pyplot() nécessite désormais la fourniture d'un chiffre
@@ -109,7 +110,7 @@ def obj_detection(my_img):
 def main():
     st.title("Welcome to Object Detection using YOLOV3 Model")
     st.write(
-        "Real-time object detection using YOLO model here. You can select one of the following options to proceed: ")
+        "Real-time object detection using YOLO model. You can select one of the following options to proceed: ")
     st.write("- The 'See an illustration' option allows you to test the application with the default image of our template")
     st.write("- The 'Choose an image of your choice' option allows you to test the application with your own image using drag & drop")
 
