@@ -1,14 +1,15 @@
+
 import streamlit as st
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 
-
+@st.cache(suppress_st_warning=True)#    ajout d'un décorateur
 def obj_detection(my_img):
     st.set_option('deprecation.showPyplotGlobalUse', False)
 
-    column1, column2 = st.beta_columns(2)
+    column1, column2 = st.columns(2)
 
     column1.subheader("Input image")
     st.text("")
