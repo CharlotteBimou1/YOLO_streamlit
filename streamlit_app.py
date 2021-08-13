@@ -18,11 +18,11 @@ def obj_detection(my_img):
     ## C://Users//lenoa//YOLO//Streamlit_yolov3//yolov3.weights : fichier des poids
     ## C://Users//lenoa//YOLO//Streamlit_yolov3//yolov3.cfg : fichier de configuration
     # YOLO model
-    net = cv2.dnn.readNet("C://Users//lenoa//YOLO//Streamlit_yolov3//yolov3.weights",
-                          "C://Users//lenoa//YOLO//Streamlit_yolov3//yolov3.cfg")
+    net = cv2.dnn.readNet("yolov3.weights",
+                          "yolov3.cfg")
 
     labels = []
-    with open("C://Users//lenoa//YOLO//Streamlit_yolov3//coco.names", "r") as f:
+    with open("coco.names", "r") as f:
         labels = [line.strip() for line in f.readlines()]
     names_of_layer = net.getLayerNames()
     output_layers = [names_of_layer[i[0] - 1] for i in net.getUnconnectedOutLayers()]
